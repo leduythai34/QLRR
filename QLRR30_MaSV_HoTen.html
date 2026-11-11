@@ -1,0 +1,1323 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QLRR30 - Mô phỏng 3D Quản lý Rủi ro Dự án Năng lượng & Phái sinh Thời tiết</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+  <style>
+    :root {
+      --bg-dark: #060b16;
+      --panel-bg: rgba(10, 19, 36, 0.88);
+      --border-cyan: rgba(0, 229, 255, 0.35);
+      --accent-cyan: #00e5ff;
+      --accent-green: #00e676;
+      --accent-amber: #ffab00;
+      --accent-red: #ff3d57;
+      --accent-purple: #b388ff;
+      --text-main: #e6f1ff;
+      --text-muted: #8fa6c9;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background: var(--bg-dark);
+      color: var(--text-main);
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+      user-select: none;
+    }
+
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+
+    /* Header Banner */
+    .top-bar {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: var(--panel-bg);
+      border: 1px solid var(--border-cyan);
+      border-radius: 12px;
+      padding: 10px 22px;
+      backdrop-filter: blur(12px);
+      display: flex;
+      align-items: center;
+      gap: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.65);
+      white-space: nowrap;
+    }
+
+    .badge-course {
+      background: linear-gradient(135deg, #0066ff, #00e5ff);
+      color: #001020;
+      font-weight: 800;
+      font-size: 12px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      letter-spacing: 0.6px;
+    }
+
+    .top-title {
+      font-size: 15px;
+      font-weight: 700;
+      letter-spacing: 0.4px;
+      color: #ffffff;
+    }
+
+    .status-pill {
+      padding: 4px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 700;
+      background: rgba(0, 230, 118, 0.16);
+      color: var(--accent-green);
+      border: 1px solid var(--accent-green);
+      transition: all 0.3s ease;
+    }
+
+    .status-pill.shock {
+      background: rgba(255, 61, 87, 0.2);
+      color: var(--accent-red);
+      border-color: var(--accent-red);
+      animation: pulseAlert 1.2s infinite alternate;
+    }
+
+    @keyframes pulseAlert {
+      from { box-shadow: 0 0 4px rgba(255, 61, 87, 0.4); }
+      to { box-shadow: 0 0 16px rgba(255, 61, 87, 0.9); }
+    }
+
+    /* Left Panel: Telemetry HUD & Sliders */
+    .hud-panel {
+      position: absolute;
+      top: 72px;
+      left: 16px;
+      bottom: 16px;
+      width: 390px;
+      z-index: 10;
+      background: var(--panel-bg);
+      border: 1px solid var(--border-cyan);
+      border-radius: 14px;
+      padding: 16px;
+      backdrop-filter: blur(14px);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+    }
+
+    /* Right Panel: Live Mathematical Results & Tornado Table */
+    .metrics-panel {
+      position: absolute;
+      top: 72px;
+      right: 16px;
+      bottom: 16px;
+      width: 420px;
+      z-index: 10;
+      background: var(--panel-bg);
+      border: 1px solid var(--border-cyan);
+      border-radius: 14px;
+      padding: 16px;
+      backdrop-filter: blur(14px);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      overflow-y: auto;
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+    }
+
+    .section-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--accent-cyan);
+      font-weight: 700;
+      border-bottom: 1px solid rgba(0, 229, 255, 0.2);
+      padding-bottom: 6px;
+      margin-bottom: 4px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .control-group {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+
+    .control-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+
+    .control-val {
+      font-weight: 700;
+      color: var(--accent-cyan);
+      font-family: 'Consolas', monospace;
+    }
+
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent-cyan);
+      cursor: pointer;
+      height: 6px;
+    }
+
+    .sub-hint {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .btn-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .btn {
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid rgba(0, 229, 255, 0.4);
+      background: rgba(0, 229, 255, 0.1);
+      color: #fff;
+      font-weight: 700;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      text-align: center;
+    }
+
+    .btn:hover {
+      background: rgba(0, 229, 255, 0.25);
+      transform: translateY(-1px);
+    }
+
+    .btn.active {
+      background: var(--accent-cyan);
+      color: #001220;
+      box-shadow: 0 0 14px rgba(0, 229, 255, 0.6);
+    }
+
+    .btn-shock {
+      grid-column: span 2;
+      background: linear-gradient(135deg, #d50000, #ff5252);
+      border: 1px solid #ff8a80;
+      color: #fff;
+      font-size: 13px;
+      padding: 12px;
+      box-shadow: 0 4px 18px rgba(255, 61, 87, 0.45);
+    }
+
+    .btn-shock:hover {
+      background: linear-gradient(135deg, #ff1744, #ff6e40);
+      box-shadow: 0 6px 24px rgba(255, 61, 87, 0.75);
+    }
+
+    .btn-base {
+      grid-column: span 2;
+      background: rgba(0, 230, 118, 0.15);
+      border-color: var(--accent-green);
+      color: var(--accent-green);
+    }
+
+    /* Metric Cards */
+    .kpi-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .kpi-card {
+      background: rgba(255, 255, 255, 0.035);
+      border-left: 3px solid var(--accent-cyan);
+      border-radius: 8px;
+      padding: 9px 11px;
+    }
+
+    .kpi-card.warn { border-left-color: var(--accent-amber); }
+    .kpi-card.danger { border-left-color: var(--accent-red); }
+    .kpi-card.success { border-left-color: var(--accent-green); }
+    .kpi-card.purple { border-left-color: var(--accent-purple); }
+
+    .kpi-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-bottom: 3px;
+    }
+
+    .kpi-value {
+      font-size: 16px;
+      font-weight: 800;
+      font-family: 'Consolas', monospace;
+    }
+
+    .kpi-sub {
+      font-size: 10.5px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .formula-box {
+      background: rgba(0, 10, 24, 0.75);
+      border: 1px solid rgba(0, 229, 255, 0.22);
+      border-radius: 8px;
+      padding: 9px 11px;
+      font-family: 'Consolas', monospace;
+      font-size: 11.5px;
+      line-height: 1.5;
+      color: #bfefff;
+    }
+
+    .tornado-row {
+      margin-bottom: 7px;
+      font-size: 11.5px;
+    }
+
+    .tornado-label {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 2px;
+    }
+
+    .tornado-bar-wrap {
+      height: 12px;
+      background: rgba(255, 255, 255, 0.06);
+      border-radius: 4px;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+    }
+
+    .tornado-bar-down {
+      background: linear-gradient(90deg, #ff3d57, #ff9100);
+      height: 100%;
+    }
+
+    .tornado-bar-up {
+      background: linear-gradient(90deg, #00b0ff, #00e676);
+      height: 100%;
+    }
+
+    /* 3D Floating Labels */
+    .label-3d {
+      position: absolute;
+      pointer-events: none;
+      z-index: 5;
+      background: rgba(6, 14, 28, 0.85);
+      border: 1px solid rgba(0, 229, 255, 0.45);
+      color: #e6f1ff;
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      transform: translate(-50%, -100%);
+      white-space: nowrap;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    }
+
+    /* Footer Legend */
+    .bottom-legend {
+      position: absolute;
+      bottom: 16px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+      background: var(--panel-bg);
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 10px;
+      padding: 8px 16px;
+      display: flex;
+      gap: 16px;
+      font-size: 11.5px;
+      backdrop-filter: blur(10px);
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+    }
+  </style>
+</head>
+<body>
+  <div id="canvas-container"></div>
+  <div id="labels-container"></div>
+
+  <!-- Top Banner -->
+  <div class="top-bar">
+    <span class="badge-course">UET_COURSEWARE_3D • QLRR30</span>
+    <span class="top-title">MÔ PHỎNG 3D RỦI RO THỊ TRƯỜNG (VaR/CVaR), PHÁI SINH THỜI TIẾT (CDD) & ĐỘ NHẠY ĐIỆN GIÓ (RADR)</span>
+    <span id="scenario-pill" class="status-pill">TRẠNG THÁI: CƠ SỞ / TÙY CHỈNH</span>
+  </div>
+
+  <!-- Left Panel: Telemetry HUD & Interactive Controls -->
+  <div class="hud-panel">
+    <div class="section-title">
+      <span>BẢNG ĐIỀU KHIỂN TELEMETRY HUD</span>
+      <span>SLIDERS</span>
+    </div>
+
+    <!-- Slider 1: WACC -->
+    <div class="control-group">
+      <div class="control-header">
+        <span>Lãi suất chiết khấu (WACC / RADR)</span>
+        <span id="val-wacc" class="control-val">8.0% / năm</span>
+      </div>
+      <input id="slider-wacc" type="range" min="5.0" max="15.0" step="0.1" value="8.0" />
+      <div class="sub-hint">
+        <span>Cơ sở: 8.0% (PVIFA=8.5595)</span>
+        <span>Rủi ro: 11.0% (PVIFA=7.1909)</span>
+      </div>
+    </div>
+
+    <!-- Slider 2: Cumulative CDD -->
+    <div class="control-group">
+      <div class="control-header">
+        <span>Chỉ số Làm mát Tích lũy (&Sigma;CDD)</span>
+        <span id="val-cdd" class="control-val">26 CDD</span>
+      </div>
+      <input id="slider-cdd" type="range" min="10" max="65" step="1" value="26" />
+      <div class="sub-hint">
+        <span>Mưa mát sự cố: 26 CDD</span>
+        <span>Strike K<sub>CDD</sub> = 45 CDD</span>
+      </div>
+    </div>
+
+    <!-- Slider 3: Annual Cash Flow CF -->
+    <div class="control-group">
+      <div class="control-header">
+        <span>Dòng tiền đều hàng năm (CF)</span>
+        <span id="val-cf" class="control-val">7.50 triệu USD</span>
+      </div>
+      <input id="slider-cf" type="range" min="4.50" max="10.50" step="0.05" value="7.50" />
+      <div class="sub-hint">
+        <span>Biên độ Tornado: &plusmn;20%</span>
+        <span>Chuẩn: 7.50 triệu USD/năm</span>
+      </div>
+    </div>
+
+    <!-- Slider 4: Initial Investment CAPEX -->
+    <div class="control-group">
+      <div class="control-header">
+        <span>Vốn đầu tư ban đầu (CAPEX)</span>
+        <span id="val-capex" class="control-val">50.0 triệu USD</span>
+      </div>
+      <input id="slider-capex" type="range" min="35.0" max="65.0" step="0.5" value="50.0" />
+      <div class="sub-hint">
+        <span>Thời hạn n = 15 năm</span>
+        <span>Chuẩn: 50.0 triệu USD</span>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top: 4px;">
+      <span>KỊCH BẢN & CHẾ ĐỘ QUAN SÁT 3D</span>
+      <span>ACTIONS</span>
+    </div>
+
+    <div class="btn-grid">
+      <button id="btn-shock" class="btn btn-shock">
+        ⚡ KÍCH HOẠT MƯA MÁT BẤT THƯỜNG & TĂNG LÃI SUẤT RỦI RO (WACC 11%, &Sigma;CDD 26)
+      </button>
+      <button id="btn-base" class="btn btn-base">
+        🔄 Khôi phục Trạng thái Cơ sở (WACC = 8.0%, CF = 7.50M, CAPEX = 50.0M)
+      </button>
+      <button id="btn-cutaway" class="btn active">
+        🔪 Chế độ Cắt lớp (Cutaway: BẬT)
+      </button>
+      <button id="btn-camera" class="btn">
+        🎥 Đổi Góc Camera 3D
+      </button>
+    </div>
+
+    <div class="section-title" style="margin-top: 4px;">
+      <span>CẤU TRÚC LỚP BẢO VỆ RỦI RO (CUTAWAY)</span>
+      <span>3 LAYERS</span>
+    </div>
+    <div class="formula-box">
+      <div>🟢 <b>Lớp Lõi (Core DCF):</b> Dòng tiền dự án Điện gió tạo NPV thực (<span id="layer-npv-text">+14.20M USD</span>).</div>
+      <div style="margin-top:4px;">🟣 <b>Lớp Đệm Phái sinh (Weather Put):</b> Bồi thường Payoff <span id="layer-payoff-text">95,000 USD</span> (Lãi ròng <span id="layer-net-text">80,000 USD</span>) khi &Sigma;CDD &lt; 45.</div>
+      <div style="margin-top:4px;">🔴 <b>Vành đai Rủi ro Đuôi (VaR/CVaR Shield):</b> Ngưỡng vốn dự phòng rủi ro thị trường VaR<sub>95%</sub> = 480k USD, CVaR<sub>95%</sub> = 674k USD/ngày.</div>
+    </div>
+  </div>
+
+  <!-- Right Panel: Live Computed Solutions -->
+  <div class="metrics-panel">
+    <div class="section-title">
+      <span>1. RỦI RO THỊ TRƯỜNG & PHÁI SINH THỜI TIẾT</span>
+      <span>NHIỆM VỤ 1</span>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card warn">
+        <div class="kpi-label">VaR<sub>95%</sub> (Ngày lỗ thứ 5/100)</div>
+        <div id="kpi-var95" class="kpi-value">480 nghìn USD</div>
+        <div class="kpi-sub">P&amp;L vị trí thứ 5: -480k USD</div>
+      </div>
+      <div class="kpi-card danger">
+        <div class="kpi-label">VaR<sub>99%</sub> (Ngày lỗ thứ 1/100)</div>
+        <div id="kpi-var99" class="kpi-value">920 nghìn USD</div>
+        <div class="kpi-sub">P&amp;L vị trí thứ 1: -920k USD</div>
+      </div>
+      <div class="kpi-card danger">
+        <div class="kpi-label">CVaR<sub>95%</sub> (Expected Shortfall)</div>
+        <div id="kpi-cvar95" class="kpi-value">674 nghìn USD</div>
+        <div class="kpi-sub">TB 5 ngày lỗ nặng nhất (-674k)</div>
+      </div>
+      <div class="kpi-card purple">
+        <div class="kpi-label">Payoff / Lãi ròng Put CDD</div>
+        <div id="kpi-payoff" class="kpi-value">95,000 USD</div>
+        <div id="kpi-netprofit" class="kpi-sub">Lãi ròng: +80,000 USD (Phí 15k)</div>
+      </div>
+    </div>
+
+    <div class="section-title" style="margin-top: 4px;">
+      <span>2. THẨM ĐỊNH DCF DƯỚI RỦI RO (RADR)</span>
+      <span>NHIỆM VỤ 2</span>
+    </div>
+
+    <div class="kpi-grid">
+      <div class="kpi-card success">
+        <div class="kpi-label">NPV Hiện tại (Theo WACC)</div>
+        <div id="kpi-npv-current" class="kpi-value">+14.20 triệu USD</div>
+        <div id="kpi-pvifa-current" class="kpi-sub">PVIFA(8.0%, 15) = 8.5595</div>
+      </div>
+      <div class="kpi-card warn">
+        <div class="kpi-label">Sụt giảm &Delta;NPV (8% &rarr; 11%)</div>
+        <div id="kpi-delta-npv" class="kpi-value">-10.26 triệu USD</div>
+        <div id="kpi-delta-pct" class="kpi-sub">Mất 72.3% giá trị NPV cơ sở</div>
+      </div>
+    </div>
+
+    <div id="live-equation" class="formula-box">
+      <!-- Populated dynamically by solver -->
+    </div>
+
+    <div class="section-title" style="margin-top: 4px;">
+      <span>3. ĐỘ NHẠY BIỂU ĐỒ TORNADO 3D (&Delta;NPV)</span>
+      <span>TORNADO CHART</span>
+    </div>
+
+    <div id="tornado-2d-summary">
+      <!-- Populated dynamically by Tornado sensitivity engine -->
+    </div>
+  </div>
+
+  <!-- Bottom Legend -->
+  <div class="bottom-legend">
+    <div class="legend-item"><span class="dot" style="background:#00e676"></span>Tua-bin &amp; Lõi Thanh khoản NPV</div>
+    <div class="legend-item"><span class="dot" style="background:#b388ff"></span>Lớp Đệm Quyền chọn Bán Thời tiết (CDD Put)</div>
+    <div class="legend-item"><span class="dot" style="background:#ff3d57"></span>Vành đai Rủi ro Thị trường (VaR<sub>95%</sub> / CVaR<sub>95%</sub>)</div>
+    <div class="legend-item"><span class="dot" style="background:#00e5ff"></span>Tháp Cơn lốc Độ nhạy 3D (3D Tornado Chart)</div>
+  </div>
+
+  <script>
+    // =========================================================================
+    // 1. BỘ DỮ LIỆU GỐC & HÀM GIẢI PHƯƠNG TRÌNH ĐỘNG (KHÔNG GÁN CỨNG SỐ TĨNH)
+    // =========================================================================
+    const HISTORICAL_100_DAYS_PNL = (() => {
+      // 5 ngày lỗ nặng nhất theo đúng đề bài (đơn vị: nghìn USD)
+      const worst5Losses = [-920, -780, -650, -540, -480];
+      // 95 ngày giao dịch còn lại trong chuỗi 100 ngày (tất cả đều > -480 nghìn USD)
+      const remaining95Days = [];
+      for (let i = 0; i < 95; i++) {
+        const val = -420 + (i * 11.5); // Trải đều từ -420 đến +661 nghìn USD
+        remaining95Days.push(Number(val.toFixed(2)));
+      }
+      return worst5Losses.concat(remaining95Days);
+    })();
+
+    // Hàm tính Rủi ro Thị trường (VaR 95%, VaR 99%, CVaR 95%) từ chuỗi P&L 100 ngày
+    function computeMarketRiskMetrics(pnlArray) {
+      const sortedAsc = [...pnlArray].sort((a, b) => a - b); // Sắp xếp từ lỗ nặng nhất đến lãi cao nhất
+      const n = sortedAsc.length; // 100 ngày
+
+      // Ngưỡng mức ý nghĩa 5% ứng với vị trí thứ 5 (index 4) trong 100 ngày lỗ nặng nhất
+      const index95 = Math.floor(n * 0.05) - 1; // index = 4 (ngày lỗ nặng thứ 5)
+      // Ngưỡng mức ý nghĩa 1% ứng với vị trí thứ 1 (index 0) trong 100 ngày lỗ nặng nhất
+      const index99 = Math.floor(n * 0.01) - 1; // index = 0 (ngày lỗ nặng thứ 1)
+
+      const pnlAt95 = sortedAsc[index95]; // -480 nghìn USD
+      const pnlAt99 = sortedAsc[index99]; // -920 nghìn USD
+
+      const var95 = Math.abs(pnlAt95); // 480 nghìn USD
+      const var99 = Math.abs(pnlAt99); // 920 nghìn USD
+
+      // CVaR_95% (Expected Shortfall): Trung bình cộng của 5% ngày lỗ nặng nhất (5 ngày đầu)
+      const tailCount = Math.floor(n * 0.05); // 5 ngày
+      const tailLosses = sortedAsc.slice(0, tailCount);
+      const sumAbsTail = tailLosses.reduce((acc, val) => acc + Math.abs(val), 0);
+      const cvar95 = sumAbsTail / tailCount; // (920 + 780 + 650 + 540 + 480) / 5 = 674 nghìn USD
+
+      return {
+        totalDays: n,
+        tailLosses,
+        pnlAt95,
+        pnlAt99,
+        var95,
+        var99,
+        cvar95
+      };
+    }
+
+    // Hàm tính Quyền chọn Bán Thời tiết (Weather Put Option dựa trên chỉ số CDD)
+    function computeWeatherPutOption(actualCDD, strikeCDD = 45, tickSizeAlpha = 5000, optionPremium = 15000) {
+      const shortfallCDD = Math.max(0, strikeCDD - actualCDD);
+      const payoff = tickSizeAlpha * shortfallCDD;
+      const netProfit = payoff - optionPremium;
+      const exercised = actualCDD < strikeCDD;
+      return {
+        actualCDD,
+        strikeCDD,
+        tickSizeAlpha,
+        optionPremium,
+        shortfallCDD,
+        payoff,
+        netProfit,
+        exercised
+      };
+    }
+
+    // Hàm tính hệ số Hiện giá Chuỗi tiền tệ đều PVIFA(r, n) và NPV dự án Điện gió
+    function computePVIFA(ratePercent, years = 15) {
+      const r = ratePercent / 100;
+      if (Math.abs(r) < 1e-9) return years;
+      const rawPVIFA = (1 - Math.pow(1 + r, -years)) / r;
+      // Làm tròn 4 chữ số thập phân chuẩn bảng tài chính (8% -> 8.5595, 11% -> 7.1909)
+      return Number(rawPVIFA.toFixed(4));
+    }
+
+    function computeWindProjectDCF(capex, annualCF, waccPercent, years = 15) {
+      const pvifa = computePVIFA(waccPercent, years);
+      const pvInflows = annualCF * pvifa;
+      const npv = -capex + pvInflows;
+
+      // Luôn tính song song mốc Cơ sở (WACC = 8%) và mốc Rủi ro (WACC = 11%) để đối chiếu độ nhạy
+      const pvifaBase8 = computePVIFA(8.0, years);
+      const npvBase8 = -capex + annualCF * pvifaBase8;
+
+      const pvifaRisk11 = computePVIFA(11.0, years);
+      const npvRisk11 = -capex + annualCF * pvifaRisk11;
+
+      const deltaNpvRisk = npvBase8 - npvRisk11;
+      const pctDropRisk = npvBase8 !== 0 ? (deltaNpvRisk / Math.abs(npvBase8)) * 100 : 0;
+
+      return {
+        capex,
+        annualCF,
+        waccPercent,
+        years,
+        pvifa,
+        pvInflows,
+        npv,
+        pvifaBase8,
+        npvBase8,
+        pvifaRisk11,
+        npvRisk11,
+        deltaNpvRisk,
+        pctDropRisk
+      };
+    }
+
+    // Hàm tính Độ nhạy Biểu đồ Cơn lốc 3D (3D Tornado Sensitivity Analysis)
+    function computeTornadoSensitivity(state) {
+      const baseNPV = computeWindProjectDCF(state.capex, state.cf, state.wacc, 15).npv;
+
+      // 1. Biến số WACC: Kịch bản thuận lợi (6.0%) vs Kịch bản cú sốc rủi ro (11.0%)
+      const npvWaccLow = computeWindProjectDCF(state.capex, state.cf, 6.0, 15).npv;
+      const npvWaccHigh = computeWindProjectDCF(state.capex, state.cf, 11.0, 15).npv;
+
+      // 2. Biến số Dòng tiền CF (±20% quanh CF hiện tại)
+      const npvCfLow = computeWindProjectDCF(state.capex, state.cf * 0.8, state.wacc, 15).npv;
+      const npvCfHigh = computeWindProjectDCF(state.capex, state.cf * 1.2, state.wacc, 15).npv;
+
+      // 3. Biến số Vốn đầu tư CAPEX (±20% quanh CAPEX hiện tại)
+      const npvCapexHigh = computeWindProjectDCF(state.capex * 1.2, state.cf, state.wacc, 15).npv; // CAPEX tăng làm giảm NPV
+      const npvCapexLow = computeWindProjectDCF(state.capex * 0.8, state.cf, state.wacc, 15).npv;  // CAPEX giảm làm tăng NPV
+
+      // 4. Biến số Vòng đời dự án n (12 năm vs 18 năm)
+      const npvLifeShort = computeWindProjectDCF(state.capex, state.cf, state.wacc, 12).npv;
+      const npvLifeLong = computeWindProjectDCF(state.capex, state.cf, state.wacc, 18).npv;
+
+      const factors = [
+        {
+          id: 'CF',
+          name: 'Dòng tiền CF (±20%)',
+          downsideNPV: npvCfLow,
+          upsideNPV: npvCfHigh,
+          deltaDown: npvCfLow - baseNPV,
+          deltaUp: npvCfHigh - baseNPV,
+          spread: Math.abs(npvCfHigh - npvCfLow)
+        },
+        {
+          id: 'CAPEX',
+          name: 'Vốn CAPEX (±20%)',
+          downsideNPV: npvCapexHigh,
+          upsideNPV: npvCapexLow,
+          deltaDown: npvCapexHigh - baseNPV,
+          deltaUp: npvCapexLow - baseNPV,
+          spread: Math.abs(npvCapexLow - npvCapexHigh)
+        },
+        {
+          id: 'WACC',
+          name: 'Lãi suất WACC (6% ↔ 11%)',
+          downsideNPV: npvWaccHigh,
+          upsideNPV: npvWaccLow,
+          deltaDown: npvWaccHigh - baseNPV,
+          deltaUp: npvWaccLow - baseNPV,
+          spread: Math.abs(npvWaccLow - npvWaccHigh)
+        },
+        {
+          id: 'LIFE',
+          name: 'Tuổi thọ dự án (12 ↔ 18 năm)',
+          downsideNPV: npvLifeShort,
+          upsideNPV: npvLifeLong,
+          deltaDown: npvLifeShort - baseNPV,
+          deltaUp: npvLifeLong - baseNPV,
+          spread: Math.abs(npvLifeLong - npvLifeShort)
+        }
+      ];
+
+      // Sắp xếp giảm dần theo biên độ dao động (Tornado funnel order)
+      factors.sort((a, b) => b.spread - a.spread);
+      return { baseNPV, factors };
+    }
+
+    // =========================================================================
+    // 2. KHỞI TẠO KHÔNG GIAN 3D (THREE.JS SCENE)
+    // =========================================================================
+    const container = document.getElementById('canvas-container');
+    const labelsContainer = document.getElementById('labels-container');
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x060b16);
+    scene.fog = new THREE.FogExp2(0x060b16, 0.012);
+
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 500);
+    camera.position.set(0, 14, 34);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.localClippingEnabled = true; // Phục vụ chế độ Cắt lớp (Cutaway View)
+    container.appendChild(renderer.domElement);
+
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.target.set(0, 5, 0);
+
+    // Ánh sáng
+    const ambientLight = new THREE.AmbientLight(0x90b4ff, 0.65);
+    scene.add(ambientLight);
+
+    const dirLight1 = new THREE.DirectionalLight(0xffffff, 1.1);
+    dirLight1.position.set(18, 30, 22);
+    scene.add(dirLight1);
+
+    const dirLight2 = new THREE.PointLight(0x00e5ff, 1.2, 60);
+    dirLight2.position.set(-12, 12, 10);
+    scene.add(dirLight2);
+
+    // Mặt phẳng Lưới tọa độ (Grid Floor)
+    const gridHelper = new THREE.GridHelper(60, 60, 0x00e5ff, 0x162844);
+    gridHelper.position.y = 0;
+    scene.add(gridHelper);
+
+    // Mặt phẳng cắt lớp (Cutaway Clipping Plane) cắt dọc theo trục Z > 0
+    const cutawayPlane = new THREE.Plane(new THREE.Vector3(0, 0, -1), 0.15);
+
+    // =========================================================================
+    // 3. MÔ HÌNH 1: BỂ THANH KHOẢN 3 LỚP BẢO VỆ RỦI RO & TUA-BIN ĐIỆN GIÓ (TRÁI)
+    // =========================================================================
+    const leftStationGroup = new THREE.Group();
+    leftStationGroup.position.set(-7.2, 0, 0);
+    scene.add(leftStationGroup);
+
+    // Đế bệ đỡ
+    const basePedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(5.2, 5.6, 0.6, 48),
+      new THREE.MeshStandardMaterial({ color: 0x102238, metalness: 0.6, roughness: 0.3 })
+    );
+    basePedestal.position.y = 0.3;
+    leftStationGroup.add(basePedestal);
+
+    // Lớp Ngoài cùng: Vành đai Rủi ro Đuôi VaR_95% & CVaR_95% (Bán kính 4.4)
+    const outerShieldMat = new THREE.MeshPhongMaterial({
+      color: 0xff3d57,
+      transparent: true,
+      opacity: 0.32,
+      side: THREE.DoubleSide,
+      clippingPlanes: [cutawayPlane],
+      shininess: 90
+    });
+    const outerShieldMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(4.4, 4.4, 6.5, 48, 1, true),
+      outerShieldMat
+    );
+    outerShieldMesh.position.y = 3.55;
+    leftStationGroup.add(outerShieldMesh);
+
+    // Vòng chuẩn CVaR 95% (674k USD) và VaR 95% (480k USD)
+    const cvarRingMesh = new THREE.Mesh(
+      new THREE.TorusGeometry(4.45, 0.09, 16, 64),
+      new THREE.MeshBasicMaterial({ color: 0xff3d57 })
+    );
+    cvarRingMesh.rotation.x = Math.PI / 2;
+    cvarRingMesh.position.y = 5.2;
+    leftStationGroup.add(cvarRingMesh);
+
+    const varRingMesh = new THREE.Mesh(
+      new THREE.TorusGeometry(4.45, 0.07, 16, 64),
+      new THREE.MeshBasicMaterial({ color: 0xffab00 })
+    );
+    varRingMesh.rotation.x = Math.PI / 2;
+    varRingMesh.position.y = 3.8;
+    leftStationGroup.add(varRingMesh);
+
+    // Lớp Giữa: Đệm Phái sinh Thời tiết Weather Put Option CDD (Bán kính 3.1)
+    const middleWeatherMat = new THREE.MeshPhongMaterial({
+      color: 0xb388ff,
+      transparent: true,
+      opacity: 0.48,
+      side: THREE.DoubleSide,
+      clippingPlanes: [cutawayPlane],
+      shininess: 100
+    });
+    const middleWeatherMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(3.1, 3.1, 5.0, 48),
+      middleWeatherMat
+    );
+    middleWeatherMesh.position.y = 3.1;
+    leftStationGroup.add(middleWeatherMesh);
+
+    // Lớp Lõi Trong Cùng: Bể Thanh khoản Dòng tiền NPV Điện gió (Bán kính 1.85)
+    const innerCoreMat = new THREE.MeshPhongMaterial({
+      color: 0x00e676,
+      emissive: 0x004d25,
+      transparent: true,
+      opacity: 0.82,
+      side: THREE.DoubleSide,
+      clippingPlanes: [cutawayPlane]
+    });
+    const innerCoreMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.85, 1.85, 6.0, 40),
+      innerCoreMat
+    );
+    innerCoreMesh.position.y = 3.6;
+    leftStationGroup.add(innerCoreMesh);
+
+    // Trụ Tua-bin Điện gió mọc từ tâm Bể Thanh khoản
+    const towerMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.28, 0.52, 13.5, 32),
+      new THREE.MeshStandardMaterial({ color: 0xdceeff, metalness: 0.5, roughness: 0.2 })
+    );
+    towerMesh.position.y = 7.0;
+    leftStationGroup.add(towerMesh);
+
+    // Nacelle (Buồng máy phát Tua-bin)
+    const nacelleMesh = new THREE.Mesh(
+      new THREE.BoxGeometry(1.1, 0.9, 2.2),
+      new THREE.MeshStandardMaterial({ color: 0xffffff, metalness: 0.4, roughness: 0.3 })
+    );
+    nacelleMesh.position.set(0, 13.8, 0.4);
+    leftStationGroup.add(nacelleMesh);
+
+    // Cụm Cánh quạt Tua-bin (Rotor + 3 Blades)
+    const rotorHub = new THREE.Group();
+    rotorHub.position.set(0, 13.8, 1.55);
+    leftStationGroup.add(rotorHub);
+
+    const hubNose = new THREE.Mesh(
+      new THREE.ConeGeometry(0.45, 0.9, 24),
+      new THREE.MeshStandardMaterial({ color: 0x00e5ff, roughness: 0.2 })
+    );
+    hubNose.rotation.x = Math.PI / 2;
+    rotorHub.add(hubNose);
+
+    for (let i = 0; i < 3; i++) {
+      const bladePivot = new THREE.Group();
+      bladePivot.rotation.z = (i * 2 * Math.PI) / 3;
+
+      const bladeGeo = new THREE.BoxGeometry(0.32, 5.2, 0.08);
+      bladeGeo.translate(0, 2.6, 0);
+      const bladeMesh = new THREE.Mesh(
+        bladeGeo,
+        new THREE.MeshStandardMaterial({ color: 0xf0f8ff, emissive: 0x002233, roughness: 0.25 })
+      );
+      bladeMesh.rotation.y = 0.22; // Góc nghiêng đón gió
+      bladePivot.add(bladeMesh);
+      rotorHub.add(bladePivot);
+    }
+
+    // Hệ thống Hạt Mưa mát (Weather Rain Particles khi CDD thấp)
+    const rainCount = 260;
+    const rainGeo = new THREE.BufferGeometry();
+    const rainPositions = new Float32Array(rainCount * 3);
+    for (let i = 0; i < rainCount; i++) {
+      rainPositions[i * 3] = (Math.random() - 0.5) * 11;
+      rainPositions[i * 3 + 1] = Math.random() * 16;
+      rainPositions[i * 3 + 2] = (Math.random() - 0.5) * 11;
+    }
+    rainGeo.setAttribute('position', new THREE.BufferAttribute(rainPositions, 3));
+    const rainMat = new THREE.PointsMaterial({
+      color: 0x00e5ff,
+      size: 0.18,
+      transparent: true,
+      opacity: 0.75
+    });
+    const rainParticles = new THREE.Points(rainGeo, rainMat);
+    leftStationGroup.add(rainParticles);
+
+    // =========================================================================
+    // 4. MÔ HÌNH 2: BIỂU ĐỒ CƠN LỐC 3D (3D TORNADO SENSITIVITY CHART - PHẢI)
+    // =========================================================================
+    const rightTornadoGroup = new THREE.Group();
+    rightTornadoGroup.position.set(7.2, 0, 0);
+    scene.add(rightTornadoGroup);
+
+    // Trục trung tâm biểu thị NPV hiện hành (Baseline Spine)
+    const spineMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 13.5, 24),
+      new THREE.MeshBasicMaterial({ color: 0x00e5ff })
+    );
+    spineMesh.position.y = 6.75;
+    rightTornadoGroup.add(spineMesh);
+
+    // Đế Tornado 3D
+    const tornadoBase = new THREE.Mesh(
+      new THREE.CylinderGeometry(5.0, 5.4, 0.6, 48),
+      new THREE.MeshStandardMaterial({ color: 0x102238, metalness: 0.6, roughness: 0.3 })
+    );
+    tornadoBase.position.y = 0.3;
+    rightTornadoGroup.add(tornadoBase);
+
+    // Tạo 4 tầng thanh 3D cho Biểu đồ Tornado (Xếp từ trên cao xuống thấp)
+    const tornadoBars3D = [];
+    const barHeights = [10.8, 8.2, 5.6, 3.0];
+
+    for (let i = 0; i < 4; i++) {
+      const rowGroup = new THREE.Group();
+      rowGroup.position.y = barHeights[i];
+
+      // Nhánh Trái (Sụt giảm NPV - Đỏ Cam)
+      const downGeo = new THREE.BoxGeometry(1, 1.15, 1.15);
+      downGeo.translate(-0.5, 0, 0);
+      const downMesh = new THREE.Mesh(
+        downGeo,
+        new THREE.MeshStandardMaterial({
+          color: 0xff3d57,
+          emissive: 0x3b000b,
+          metalness: 0.25,
+          roughness: 0.3
+        })
+      );
+
+      // Nhánh Phải (Gia tăng NPV - Xanh Lục/Lam)
+      const upGeo = new THREE.BoxGeometry(1, 1.15, 1.15);
+      upGeo.translate(0.5, 0, 0);
+      const upMesh = new THREE.Mesh(
+        upGeo,
+        new THREE.MeshStandardMaterial({
+          color: 0x00e676,
+          emissive: 0x00381b,
+          metalness: 0.25,
+          roughness: 0.3
+        })
+      );
+
+      rowGroup.add(downMesh);
+      rowGroup.add(upMesh);
+      rightTornadoGroup.add(rowGroup);
+
+      tornadoBars3D.push({ rowGroup, downMesh, upMesh, yPos: barHeights[i] });
+    }
+
+    // Nhãn 3D nổi trong không gian
+    const floatingLabels = [];
+    function createFloatingLabel(text, worldPos) {
+      const div = document.createElement('div');
+      div.className = 'label-3d';
+      div.innerHTML = text;
+      labelsContainer.appendChild(div);
+      floatingLabels.push({ el: div, pos: worldPos });
+      return div;
+    }
+
+    const lblTurbine = createFloatingLabel('⚡ Tua-bin Điện gió (NPV Core)', new THREE.Vector3(-7.2, 15.6, 0));
+    const lblCoreNPV = createFloatingLabel('Lõi NPV: +14.20M USD', new THREE.Vector3(-7.2, 6.8, 0));
+    const lblWeather = createFloatingLabel('Đệm CDD Put: +95k USD', new THREE.Vector3(-7.2, 3.3, 3.2));
+    const lblVaR = createFloatingLabel('Vành đai CVaR 95%: 674k USD', new THREE.Vector3(-7.2, 1.3, 4.5));
+    const lblTornadoHeader = createFloatingLabel('🌪️ BIỂU ĐỒ TORNADO ĐỘ NHẠY 3D', new THREE.Vector3(7.2, 14.3, 0));
+    const lblTornadoRows = [
+      createFloatingLabel('', new THREE.Vector3(7.2, barHeights[0] + 1.0, 0)),
+      createFloatingLabel('', new THREE.Vector3(7.2, barHeights[1] + 1.0, 0)),
+      createFloatingLabel('', new THREE.Vector3(7.2, barHeights[2] + 1.0, 0)),
+      createFloatingLabel('', new THREE.Vector3(7.2, barHeights[3] + 1.0, 0))
+    ];
+
+    // =========================================================================
+    // 5. TRẠNG THÁI MÔ PHỎNG & ĐỒNG BỘ HÓA TOÀN BỘ GIAO DIỆN + 3D + HỌC LIỆU
+    // =========================================================================
+    const simState = {
+      wacc: 8.0,        // Mặc định ở 8.0% theo yêu cầu đề bài
+      cdd: 26,          // Mặc định ở 26 CDD (Strike = 45 CDD)
+      cf: 7.50,         // Mặc định 7.50 triệu USD/năm
+      capex: 50.0,      // Mặc định 50.0 triệu USD
+      years: 15,
+      cutawayEnabled: true,
+      cameraPreset: 0
+    };
+
+    // Khởi tạo chuẩn học liệu window.UET_COURSEWARE_3D của Khoa
+    window.UET_COURSEWARE_3D = {
+      courseCode: 'QLRR30',
+      version: '2.0.0',
+      title: 'Mô phỏng 3D Rủi ro Thị trường (VaR/CVaR), Phái sinh Thời tiết (CDD) & Độ nhạy Dự án Điện gió (RADR)',
+      parameters: simState,
+      datasets: {
+        historical100DaysPnL: HISTORICAL_100_DAYS_PNL
+      },
+      solvers: {
+        computeMarketRiskMetrics,
+        computeWeatherPutOption,
+        computePVIFA,
+        computeWindProjectDCF,
+        computeTornadoSensitivity
+      },
+      latestResults: {},
+      triggerMarketShock: () => triggerMarketShockScenario(),
+      resetBaseScenario: () => resetToBaseScenario(),
+      toggleCutawayView: () => toggleCutaway()
+    };
+
+    // Hàm cập nhật toàn bộ tính toán và hình học 3D
+    function updateSimulation() {
+      const marketRisk = computeMarketRiskMetrics(HISTORICAL_100_DAYS_PNL);
+      const weatherOpt = computeWeatherPutOption(simState.cdd, 45, 5000, 15000);
+      const dcf = computeWindProjectDCF(simState.capex, simState.cf, simState.wacc, simState.years);
+      const tornado = computeTornadoSensitivity(simState);
+
+      // Lưu kết quả động vào chuẩn học liệu window.UET_COURSEWARE_3D
+      window.UET_COURSEWARE_3D.latestResults = {
+        marketRisk,
+        weatherOpt,
+        dcf,
+        tornado
+      };
+
+      // Cập nhật hiển thị giá trị trên Sliders
+      document.getElementById('val-wacc').textContent = `${simState.wacc.toFixed(1)}% / năm`;
+      document.getElementById('val-cdd').textContent = `${simState.cdd} CDD`;
+      document.getElementById('val-cf').textContent = `${simState.cf.toFixed(2)} triệu USD`;
+      document.getElementById('val-capex').textContent = `${simState.capex.toFixed(1)} triệu USD`;
+
+      // Cập nhật Nhiệm vụ 1: VaR, CVaR & Weather Put Option
+      document.getElementById('kpi-var95').textContent = `${marketRisk.var95.toLocaleString('en-US')} nghìn USD`;
+      document.getElementById('kpi-var99').textContent = `${marketRisk.var99.toLocaleString('en-US')} nghìn USD`;
+      document.getElementById('kpi-cvar95').textContent = `${marketRisk.cvar95.toLocaleString('en-US')} nghìn USD`;
+      document.getElementById('kpi-payoff').textContent = `${weatherOpt.payoff.toLocaleString('en-US')} USD`;
+      const netSign = weatherOpt.netProfit >= 0 ? '+' : '';
+      document.getElementById('kpi-netprofit').textContent =
+        `Lãi ròng: ${netSign}${weatherOpt.netProfit.toLocaleString('en-US')} USD (Phí 15,000 USD)`;
+
+      // Cập nhật Nhiệm vụ 2: NPV & Độ sụt giảm RADR
+      const npvSign = dcf.npv >= 0 ? '+' : '';
+      document.getElementById('kpi-npv-current').textContent = `${npvSign}${dcf.npv.toFixed(2)} triệu USD`;
+      document.getElementById('kpi-pvifa-current').textContent =
+        `PVIFA(${simState.wacc.toFixed(1)}%, 15) = ${dcf.pvifa.toFixed(4)} | Chính xác: ${dcf.npv.toFixed(5)}M`;
+
+      document.getElementById('kpi-delta-npv').textContent = `-${dcf.deltaNpvRisk.toFixed(2)} triệu USD`;
+      document.getElementById('kpi-delta-pct').textContent =
+        `8% (${dcf.npvBase8.toFixed(2)}M) → 11% (${dcf.npvRisk11.toFixed(2)}M): Giảm ${dcf.pctDropRisk.toFixed(1)}%`;
+
+      // Cập nhật khung giải phương trình trực tiếp
+      document.getElementById('live-equation').innerHTML = `
+        <div><b>• Phương trình NPV(WACC = ${simState.wacc.toFixed(1)}%):</b></div>
+        <div>NPV = -${simState.capex.toFixed(1)} + ${simState.cf.toFixed(2)} &times; ${dcf.pvifa.toFixed(4)} = <b>${npvSign}${dcf.npv.toFixed(5)} triệu USD (&approx; ${dcf.npv.toFixed(2)} triệu USD)</b></div>
+        <div style="margin-top:4px;"><b>• Phương trình Put Option (&Sigma;CDD = ${simState.cdd}, K = 45):</b></div>
+        <div>Payoff = 5,000 &times; max(0, 45 - ${simState.cdd}) = <b>${weatherOpt.payoff.toLocaleString('en-US')} USD</b> | Lãi ròng = <b>${netSign}${weatherOpt.netProfit.toLocaleString('en-US')} USD</b></div>
+        <div style="margin-top:4px;"><b>• Phương trình CVaR<sub>95%</sub> (5/100 ngày lỗ nặng nhất):</b></div>
+        <div>CVaR<sub>95%</sub> = (${marketRisk.tailLosses.map(v => Math.abs(v)).join(' + ')}) / 5 = <b>${marketRisk.cvar95} nghìn USD/ngày</b></div>
+      `;
+
+      // Cập nhật mô tả 3 lớp Cutaway
+      document.getElementById('layer-npv-text').textContent = `${npvSign}${dcf.npv.toFixed(2)}M USD`;
+      document.getElementById('layer-payoff-text').textContent = `${weatherOpt.payoff.toLocaleString('en-US')} USD`;
+      document.getElementById('layer-net-text').textContent = `${netSign}${weatherOpt.netProfit.toLocaleString('en-US')} USD`;
+
+      // Cập nhật trạng thái Banner
+      const pill = document.getElementById('scenario-pill');
+      if (Math.abs(simState.wacc - 11.0) < 0.05 && simState.cdd === 26) {
+        pill.textContent = '⚠️ CÚ SỐC RỦI RO: WACC = 11.0% | ΣCDD = 26 | NPV = 3.93M USD';
+        pill.classList.add('shock');
+      } else if (Math.abs(simState.wacc - 8.0) < 0.05) {
+        pill.textContent = '✅ TRẠNG THÁI CƠ SỞ: WACC = 8.0% | NPV = +14.20M USD';
+        pill.classList.remove('shock');
+      } else {
+        pill.textContent = `⚙️ MÔ PHỎNG ĐỘNG: WACC = ${simState.wacc.toFixed(1)}% | ΣCDD = ${simState.cdd}`;
+        pill.classList.remove('shock');
+      }
+
+      // Cập nhật Bể Thanh khoản 3D (Chiều cao Lõi NPV & Lớp đệm Thời tiết)
+      const coreScaleY = THREE.MathUtils.clamp((dcf.npv + 10) / 28, 0.18, 1.5);
+      innerCoreMesh.scale.y = coreScaleY;
+      innerCoreMesh.position.y = 0.6 + (6.0 * coreScaleY) / 2;
+      innerCoreMat.color.setHex(dcf.npv >= 5 ? 0x00e676 : (dcf.npv >= 0 ? 0xffab00 : 0xff3d57));
+
+      // Lớp đệm Phái sinh Thời tiết dâng cao khi quyền chọn phát sinh Payoff > 0
+      const weatherScaleY = THREE.MathUtils.clamp(0.25 + (weatherOpt.payoff / 120000), 0.25, 1.45);
+      middleWeatherMesh.scale.y = weatherScaleY;
+      middleWeatherMesh.position.y = 0.6 + (5.0 * weatherScaleY) / 2;
+      middleWeatherMat.opacity = weatherOpt.payoff > 0 ? 0.58 : 0.22;
+
+      // Nhãn 3D bên Bể Thanh khoản
+      lblCoreNPV.innerHTML = `Lõi NPV: <b>${npvSign}${dcf.npv.toFixed(2)}M USD</b>`;
+      lblWeather.innerHTML = `Đệm CDD Put: <b>+${weatherOpt.payoff.toLocaleString('en-US')} USD</b>`;
+
+      // Cập nhật Biểu đồ Cơn lốc Tornado 3D & Bảng Tornado 2D
+      const tornadoHTML = [];
+      const scaleFactor3D = 0.34; // Quy đổi triệu USD sang đơn vị chiều dài 3D
+
+      tornado.factors.forEach((factor, idx) => {
+        const bar3D = tornadoBars3D[idx];
+        const downLen = Math.max(0.25, Math.abs(factor.deltaDown) * scaleFactor3D);
+        const upLen = Math.max(0.25, Math.abs(factor.deltaUp) * scaleFactor3D);
+
+        bar3D.downMesh.scale.x = downLen;
+        bar3D.upMesh.scale.x = upLen;
+
+        lblTornadoRows[idx].innerHTML =
+          `${idx + 1}. ${factor.name}: <span style="color:#ff6e7f">${factor.downsideNPV.toFixed(2)}M</span> &leftrightarrow; <span style="color:#5efc82">+${factor.upsideNPV.toFixed(2)}M</span>`;
+
+        const maxSpread = tornado.factors[0].spread || 1;
+        const downPct = Math.min(50, (Math.abs(factor.deltaDown) / maxSpread) * 90);
+        const upPct = Math.min(50, (Math.abs(factor.deltaUp) / maxSpread) * 90);
+
+        tornadoHTML.push(`
+          <div class="tornado-row">
+            <div class="tornado-label">
+              <span><b>#${idx + 1} ${factor.name}</b></span>
+              <span>Biên độ: <b>${factor.spread.toFixed(2)}M USD</b> (${factor.downsideNPV.toFixed(2)}M &rarr; +${factor.upsideNPV.toFixed(2)}M)</span>
+            </div>
+            <div class="tornado-bar-wrap">
+              <div style="width:50%; display:flex; justify-content:flex-end;">
+                <div class="tornado-bar-down" style="width:${downPct}%"></div>
+              </div>
+              <div style="width:50%; display:flex; justify-content:flex-start;">
+                <div class="tornado-bar-up" style="width:${upPct}%"></div>
+              </div>
+            </div>
+          </div>
+        `);
+      });
+
+      document.getElementById('tornado-2d-summary').innerHTML = tornadoHTML.join('');
+    }
+
+    // =========================================================================
+    // 6. SỰ KIỆN TƯƠNG TÁC SLIDERS & NÚT KÍCH HOẠT CÚ SỐC THỊ TRƯỜNG
+    // =========================================================================
+    const sliderWacc = document.getElementById('slider-wacc');
+    const sliderCdd = document.getElementById('slider-cdd');
+    const sliderCf = document.getElementById('slider-cf');
+    const sliderCapex = document.getElementById('slider-capex');
+
+    sliderWacc.addEventListener('input', (e) => {
+      simState.wacc = parseFloat(e.target.value);
+      updateSimulation();
+    });
+
+    sliderCdd.addEventListener('input', (e) => {
+      simState.cdd = parseInt(e.target.value, 10);
+      updateSimulation();
+    });
+
+    sliderCf.addEventListener('input', (e) => {
+      simState.cf = parseFloat(e.target.value);
+      updateSimulation();
+    });
+
+    sliderCapex.addEventListener('input', (e) => {
+      simState.capex = parseFloat(e.target.value);
+      updateSimulation();
+    });
+
+    // Hiệu ứng chuyển mượt thông số khi bấm nút Kích hoạt Sự cố / Cú sốc Thị trường
+    let activeTransition = null;
+    function animateParametersTo(targetParams, durationMs = 950) {
+      if (activeTransition) cancelAnimationFrame(activeTransition);
+      const startParams = {
+        wacc: simState.wacc,
+        cdd: simState.cdd,
+        cf: simState.cf,
+        capex: simState.capex
+      };
+      const startTime = performance.now();
+
+      function step(now) {
+        const t = Math.min(1, (now - startTime) / durationMs);
+        const ease = 1 - Math.pow(1 - t, 3); // Cubic ease-out
+
+        simState.wacc = Number((startParams.wacc + (targetParams.wacc - startParams.wacc) * ease).toFixed(2));
+        simState.cdd = Math.round(startParams.cdd + (targetParams.cdd - startParams.cdd) * ease);
+        simState.cf = Number((startParams.cf + (targetParams.cf - startParams.cf) * ease).toFixed(2));
+        simState.capex = Number((startParams.capex + (targetParams.capex - startParams.capex) * ease).toFixed(1));
+
+        sliderWacc.value = simState.wacc;
+        sliderCdd.value = simState.cdd;
+        sliderCf.value = simState.cf;
+        sliderCapex.value = simState.capex;
+
+        updateSimulation();
+
+        if (t < 1) {
+          activeTransition = requestAnimationFrame(step);
+        }
+      }
+      activeTransition = requestAnimationFrame(step);
+    }
+
+    function triggerMarketShockScenario() {
+      animateParametersTo({
+        wacc: 11.0,
+        cdd: 26,
+        cf: 7.50,
+        capex: 50.0
+      });
+    }
+
+    function resetToBaseScenario() {
+      animateParametersTo({
+        wacc: 8.0,
+        cdd: 26,
+        cf: 7.50,
+        capex: 50.0
+      });
+    }
+
+    function toggleCutaway() {
+      simState.cutawayEnabled = !simState.cutawayEnabled;
+      const planes = simState.cutawayEnabled ? [cutawayPlane] : [];
+      outerShieldMat.clippingPlanes = planes;
+      middleWeatherMat.clippingPlanes = planes;
+      innerCoreMat.clippingPlanes = planes;
+
+      const btn = document.getElementById('btn-cutaway');
+      btn.textContent = simState.cutawayEnabled ? '🔪 Chế độ Cắt lớp (Cutaway: BẬT)' : '🔪 Chế độ Cắt lớp (Cutaway: TẮT)';
+      btn.classList.toggle('active', simState.cutawayEnabled);
+    }
+
+    document.getElementById('btn-shock').addEventListener('click', triggerMarketShockScenario);
+    document.getElementById('btn-base').addEventListener('click', resetToBaseScenario);
+    document.getElementById('btn-cutaway').addEventListener('click', toggleCutaway);
+
+    document.getElementById('btn-camera').addEventListener('click', () => {
+      simState.cameraPreset = (simState.cameraPreset + 1) % 3;
+      if (simState.cameraPreset === 0) {
+        camera.position.set(0, 14, 34);
+        controls.target.set(0, 5, 0);
+      } else if (simState.cameraPreset === 1) {
+        // Cận cảnh Cắt lớp Bể Thanh khoản & Tua-bin
+        camera.position.set(-7.2, 8, 17);
+        controls.target.set(-7.2, 4.5, 0);
+      } else {
+        // Cận cảnh Biểu đồ Tornado 3D
+        camera.position.set(7.2, 9, 19);
+        controls.target.set(7.2, 6.5, 0);
+      }
+      controls.update();
+    });
+
+    // =========================================================================
+    // 7. VÒNG LẶP DỰNG HÌNH 3D (ANIMATION LOOP)
+    // =========================================================================
+    function updateFloatingLabels() {
+      const widthHalf = window.innerWidth / 2;
+      const heightHalf = window.innerHeight / 2;
+
+      floatingLabels.forEach((item) => {
+        const vec = item.pos.clone();
+        vec.project(camera);
+        if (vec.z > 1) {
+          item.el.style.display = 'none';
+          return;
+        }
+        const x = (vec.x * widthHalf) + widthHalf;
+        const y = -(vec.y * heightHalf) + heightHalf;
+        item.el.style.display = 'block';
+        item.el.style.left = `${x}px`;
+        item.el.style.top = `${y}px`;
+      });
+    }
+
+    const clock = new THREE.Clock();
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = clock.getDelta();
+      const elapsed = clock.getElapsedTime();
+
+      // Quay cánh quạt Tua-bin điện gió (tốc độ tỷ lệ với dòng tiền CF)
+      const spinSpeed = 0.35 * simState.cf;
+      rotorHub.rotation.z -= spinSpeed * dt;
+
+      // Hiệu ứng hạt mưa mát rơi xuống khi CDD thấp (< 45 Strike)
+      const rainIntensity = THREE.MathUtils.clamp((48 - simState.cdd) / 30, 0.08, 1.0);
+      rainMat.opacity = rainIntensity * 0.85;
+      const posAttr = rainGeo.getAttribute('position');
+      for (let i = 0; i < rainCount; i++) {
+        let y = posAttr.getY(i);
+        y -= (5.5 + rainIntensity * 6.0) * dt;
+        if (y < 0.5) y = 15.5;
+        posAttr.setY(i, y);
+      }
+      posAttr.needsUpdate = true;
+
+      // Dao động nhẹ các vòng bảo vệ rủi ro VaR/CVaR
+      cvarRingMesh.position.y = 5.2 + Math.sin(elapsed * 2.5) * 0.12;
+      varRingMesh.position.y = 3.8 + Math.cos(elapsed * 2.5) * 0.08;
+
+      controls.update();
+      updateFloatingLabels();
+      renderer.render(scene, camera);
+    }
+
+    window.addEventListener('resize', () => {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+
+    // Khởi chạy tính toán lần đầu & bắt đầu vòng lặp 3D
+    updateSimulation();
+    animate();
+  </script>
+</body>
+</html>
